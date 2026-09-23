@@ -11,3 +11,5 @@ exports/
 *.sqlite*
 *.dpapi
 *.jsonl
+.log/
+

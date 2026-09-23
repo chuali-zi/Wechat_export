@@ -1,14 +1,25 @@
 ### 还在自己研究readme吗！！什么年代了，把仓库clone下去，用你的agent打开，直接描述你的提取需求，agent自己会去读readme并帮助你提取!!
 
-# wxtext：定向导出自己的微信私聊文字
+# wxtext：导出自己的微信私聊文字
 
-本地命令行工具，采集和实际导出在 **Windows 本地、当前登录用户**下运行。输入某位联系人的稳定 ID、微信号、唯一昵称或备注，输出该私聊本机已有的普通文字。没有 UI、网络服务、遥测、GitHub 上传或其他账号采集功能。
+本地命令行工具：输入某位联系人的稳定 ID、微信号、唯一昵称或备注，导出与该联系人的本机私聊文字记录。不联网、无 UI、无遥测，只处理本机已有的数据。
 
-**当前验证状态：**跨平台核心使用独立 SQLCipher 4 引擎生成的数据库测试；Windows API、DPAPI 和你所安装微信的内存布局需要 Windows 实机验收。代码中的内存特征只是候选定位，只有数据库页 HMAC 校验通过才接受密钥，不能据此宣称兼容全部“最新微信”。
+## 功能特性
 
-## Windows 快速使用
+- 按联系人导出私聊**普通文字**消息（含 Unicode 表情、换行和 Zstandard 压缩的长文字）。
+- 图片、语音、文件、引用/链接卡片及系统通知不展开，跳过数量记录在 `manifest.json`。
+- 仅限本机已有记录；手机独有的历史需先通过微信自身的迁移功能同步到本机。
+- 输出 `messages.txt`（可读）、`messages.jsonl`（结构化）和 `manifest.json`（清单与校验哈希）。
 
-安装 Python 3.12 或更新的 **64 位**版本，在项目目录打开 PowerShell：
+## 环境要求
+
+- Windows，当前登录用户运行；采集和导出不在 WSL 内运行。
+- Python 3.12 或更新的 64 位版本。
+- 微信 4.x，且为本机当前登录的账号。
+
+## 安装
+
+在项目目录打开 PowerShell：
 
 ```powershell
 py -3 -m venv .venv
@@ -16,44 +27,53 @@ py -3 -m venv .venv
 .\wxtext.cmd doctor
 ```
 
-安装依赖时 pip 会联网；安装后工具运行不联网。无需激活虚拟环境或更改 PowerShell 执行策略。也可以用 `.\.venv\Scripts\python.exe -m wxtext` 代替 `.\wxtext.cmd`。
+安装依赖时 pip 需要联网；安装后工具运行不联网。无需激活虚拟环境或更改 PowerShell 执行策略，也可以用 `.\.venv\Scripts\python.exe -m wxtext` 代替 `.\wxtext.cmd`。
 
-1. 自己打开微信，登录要提取的账号。
-2. 在微信设置里确认数据保存位置，找到该账号的 `db_storage`。首次运行：
+## 快速上手
+
+四步完成一次导出。
+
+**第 1 步：登录微信**，在微信设置里确认数据保存位置，找到该账号的 `db_storage` 目录。
+
+**第 2 步：缓存密钥**
 
 ```powershell
 .\wxtext.cmd prepare --data-dir "D:\微信文件\xwechat_files\你的账号目录\db_storage"
 ```
 
-数据目录也会从微信配置和 Documents 的常见位置发现；出现多个账号时必须用 `--data-dir` 明确选择。工具不做全盘搜索。路径会记住，以后直接 `prepare` 即可。
+看到“已验证并加密缓存”即成功。数据目录也能从微信配置和 Documents 的常见位置自动发现；出现多个账号时必须用 `--data-dir` 明确选择。路径会记住，以后直接运行 `prepare` 即可。
 
-3. 看到“已验证并加密缓存”后，**从微信托盘菜单正常退出**。只关闭聊天窗口不算退出。
-4. 搜索联系人，找到稳定的 `user_id`：
+**第 3 步：从微信托盘菜单正常退出微信**。只关闭聊天窗口不算退出。
+
+**第 4 步：查找联系人并导出**
 
 ```powershell
 .\wxtext.cmd contacts --query "张三"
 .\wxtext.cmd export --target "wxid_目标" --out "D:\我的聊天导出"
 ```
 
-唯一昵称、备注或微信号也可直接导出：
+`export --target` 也接受唯一昵称、备注或微信号：
 
 ```powershell
 .\wxtext.cmd export --target "老朋友" --out "D:\我的聊天导出"
 ```
 
-昵称重名时返回候选人，不自动挑选。重新导出时微信仍须退出；有效缓存可以复用，不必每次扫描内存。
+昵称重名时返回候选列表，不会自动挑选，需用具体 `user_id` 重试。若不能确定自己的 ID，运行 `contacts` 确认后用 `--self-id "wxid_自己"` 明确指定；`prepare --self-id` 可保存此设置。
 
-若不能确定自己的 ID，运行 `contacts` 查看联系人数据，确认自己的稳定 `user_id` 后明确指定：
+## 命令参考
 
-```powershell
-.\wxtext.cmd export --target "wxid_目标" --self-id "wxid_自己" --out "D:\我的聊天导出"
-```
+| 命令 | 作用 |
+| --- | --- |
+| `doctor` | 检查环境、数据目录、数据库清单和密钥缓存状态 |
+| `prepare` | 扫描微信进程内存，验证并加密缓存密钥；`--data-dir` 选择账号，`--self-id` 保存自己的 ID，`--scan-timeout` 调整扫描时限（默认 60 秒） |
+| `contacts --query "关键词"` | 按备注、昵称、微信号搜索联系人，返回稳定 `user_id` |
+| `export --target <ID或名称> --out <目录>` | 导出目标私聊文字；`--self-id` 指定自己的 ID |
 
-`prepare --self-id "wxid_自己"` 可以保存此设置。这里不是自己的昵称；若与消息发送者映射不符，将停止导出。
+所有子命令支持 `--json`：stdout 输出单个 JSON 结果，进度写 stderr。返回码 `0` 成功、`2` 需要配合或不支持、`3` 系统/数据库错误、`130` 用户中断。
 
-## 输出与数据处理
+## 输出说明
 
-每次成功生成一个 `private-<内容指纹>` 目录，包含：
+每次成功导出生成一个 `private-<内容指纹>` 目录：
 
 | 文件 | 内容 |
 | --- | --- |
@@ -61,64 +81,61 @@ py -3 -m venv .venv
 | `messages.jsonl` | 一行一条消息，UTF-8；包含 UTC 时间、原始 Unix 秒、消息 ID 和来源 |
 | `manifest.json` | 目标、数量、覆盖时间、分片摘要、重复数量、跳过的消息类型和输出文件哈希 |
 
-相同快照、目标和显示时区重复导出会复用相同结果；不同快照生成新的目录。已有文件被手工修改时，不覆盖。
+相同快照、目标和显示时区重复导出会复用相同结果；微信有新消息后重新导出生成新目录，旧导出不受影响。已有文件被手工修改时不覆盖。
 
-仅输出普通文字类型（包含 Unicode 表情、换行及 Zstandard 压缩长文字）。图片、语音、文件、引用/链接卡片及系统通知不展开，跳过数量写入说明。未知压缩格式或无法解码的文字会报错，不截断或猜测正文。每条解压文字限制为 16 MiB。
+## 更新与重新导出
 
-目标私聊可能跨多个 `message_N.db`。工具必须验证所有消息分库的密钥和结构，逐库解密、查询目标后清理明文；其他人的消息不进入最终归档。联系人存在但所有分库均无该会话时返回 `NO_LOCAL_CONVERSATION`；会话仅有非文字消息时成功输出零条文字并提供类型统计。
+微信产生新消息后，重复以下流程即可：
 
-源数据库和 WAL 只按二进制读取，不执行源文件写入、checkpoint 或迁移。微信正常退出后，工具复制数据库及存在的 `-wal`，复核文件清单、大小、mtime 和 SHA-256；来源清单在对应数据库的 `wal` 字段中记录 WAL 文件名、大小和哈希。加密 WAL 仅在私有副本上验证并重放已提交事务，随后解密；源文件保持不变。非空 `-journal` 仍阻止导出，不要手动删除任何日志。首次快照会顺序读取并复核哈希，大账号耗时随数据量增长。
+```powershell
+# 1. 登录微信后重新缓存（缓存仍有效时可跳过）
+.\wxtext.cmd prepare
+# 2. 从托盘正常退出微信
+.\wxtext.cmd export --target "wxid_目标" --out "D:\我的聊天导出"
+```
 
-WAL 重放检查头部、滚动校验和及加密页 HMAC；只应用最后一次有效提交之前的事务。同一代未提交帧也必须通过验证，但不重放；完整帧头的盐与 WAL 头部盐不匹配时，其后的旧代或预分配尾部不再解析、不重放，允许非整帧尾部。活动代的残缺头部/帧和损坏会拒绝导出，不会静默退回旧数据库。此能力限于已实现的加密格式和已退出客户端，不代表支持在线读取或所有微信版本，仍需 Windows 实机验收。
+重新导出时微信仍须处于退出状态；有效缓存可以复用，不必每次扫描内存。
+
+## 状态目录
 
 状态默认保存于 `%LOCALAPPDATA%\wxtext`：
 
 - `settings.json`：选定的数据目录和可选的自己 ID。
 - `keys/*.dpapi`：当前 Windows 用户 DPAPI 加密的已验证密钥。
-- `work/`：临时快照和目标消息排序数据库，正常完成、异常和 Ctrl+C 时清理。
+- `work/`：临时快照和排序数据库，正常完成、异常和 Ctrl+C 时自动清理。
 
-运行状态、导出目录和原微信账号目录必须分开。进程被强制结束或断电时可能留下 `work`，确认没有工具正在运行后可手动删除其残留子目录；不要删除微信的数据文件。缓存不能直接给 WSL 或另一 Windows 用户使用；Python 不能保证所有内存副本安全擦除。
+缓存绑定 Windows 用户，不能直接给 WSL 或其他 Windows 用户使用。进程被强制结束可能留下 `work` 残留，确认没有工具正在运行后可手动删除其子目录；不要删除微信自己的数据文件。
 
-## 机器调用与故障处理
+## 故障排查
 
-所有子命令支持 `--json`：stdout 为单个 JSON 结果，进度写 stderr。返回码 `0` 成功、`2` 需要配合或不支持、`3` 系统/数据库错误、`130` 用户中断。
-
-```powershell
-.\wxtext.cmd doctor --json
-.\wxtext.cmd prepare --scan-timeout 120 --json
-.\wxtext.cmd export --target "wxid_目标" --out "D:\我的聊天导出" --json
-```
-
-主要扫描默认最多 60 秒，另有最多 10 秒的主密钥布局回退；不自动无限重试。
-
-| 状态 | 需要怎样配合 |
+| 状态 | 处理 |
 | --- | --- |
-| `WINDOWS_REQUIRED` | 改到 Windows PowerShell 运行；WSL 只负责开发/离线测试 |
+| `WINDOWS_REQUIRED` | 改到 Windows PowerShell 运行 |
 | `NEED_LOGIN` | 自己打开并登录微信 |
 | `NEED_EXIT` | 从托盘正常退出微信后重跑当前命令 |
-| `NEED_CLEAN_EXIT` | 存在非空 rollback journal；正常打开再退出微信，仍有日志时停止并在本机适配，不能删日志 |
-| `INVALID_WAL` / `PAGE_AUTH_FAILED` | WAL 格式、事务边界或认证失败；保留源文件和日志，停止并在本机核查，不强行忽略 WAL |
-| `SOURCE_CHANGED` | 快照期间数据库或 WAL 发生变化；确认微信已退出后重跑 |
-| `ACCOUNT_REQUIRED` | 用 `--data-dir` 明确选择自己的 `db_storage` |
-| `ACCESS_DENIED` | 使用相同 Windows 用户；如果微信以管理员运行，改用管理员 PowerShell |
-| `KEY_NOT_FOUND` | 确认账号目录，打开目标聊天/历史记录后再 prepare；仍失败则依据完整版本适配 |
-| `UNSUPPORTED_VERSION` | 检查 doctor 的完整文件版本，不盲目重试旧版偏移 |
-| `SELF_ID_REQUIRED` / `SENDER_UNRESOLVED` | 核实自己的稳定 ID 和当前分库发送者映射 |
+| `NEED_CLEAN_EXIT` | 存在非空 rollback journal；正常打开再退出微信，仍有日志则停止排查，不要删日志 |
+| `INVALID_WAL` / `PAGE_AUTH_FAILED` | 保留源文件和日志停止核查，不要强行忽略 WAL |
+| `SOURCE_CHANGED` | 快照期间数据库发生变化；确认微信已退出后重跑 |
+| `ACCOUNT_REQUIRED` | 用 `--data-dir` 明确选择账号 |
+| `ACCESS_DENIED` | 使用相同 Windows 用户；微信以管理员运行时改用管理员 PowerShell |
+| `KEY_NOT_FOUND` | 确认账号目录，打开目标聊天/历史记录后再 prepare；仍失败按版本信息适配 |
+| `UNSUPPORTED_VERSION` | 检查 doctor 输出的完整文件版本，不盲目重试 |
+| `SELF_ID_REQUIRED` / `SENDER_UNRESOLVED` | 核实自己的稳定 ID 和发送者映射 |
 | `AMBIGUOUS_TARGET` | 使用返回的具体 `user_id` |
-| `UNSUPPORTED_SCHEMA` / `TEXT_DECODE_FAILED` | 根据报错的分库、表、列或 local_id 在本机适配 |
-| `CACHE_UNAVAILABLE` / `CACHE_INVALID` | 使用原 Windows 用户，必要时 `prepare --refresh` 重建该账号缓存 |
+| `UNSUPPORTED_SCHEMA` / `TEXT_DECODE_FAILED` | 按报错的分库、表、列或 local_id 适配 |
+| `CACHE_UNAVAILABLE` / `CACHE_INVALID` | 使用原 Windows 用户，必要时 `prepare --refresh` 重建缓存 |
 
-`--state-dir` 可在每个子命令后指定自定义状态目录；后续调用必须使用同一目录。工具不要求关闭系统安全功能，也不会自动修改微信或强制结束进程。
+`--state-dir` 可在每个子命令后指定自定义状态目录；后续调用必须使用同一目录。工具不要求关闭系统安全功能，也不会修改微信文件或强制结束进程。
 
-## 开发和验证
+## 限制
 
-```bash
-python3 -m pip install -e '.[test]'
-python3 -m pytest -q
-```
+- 只导出普通文字；无法解压或解码的文字会报错，不截断或猜测正文。
+- 源数据库和 WAL 只按二进制读取，不做写入、checkpoint 或迁移。
+- 对微信版本的兼容依赖本机的内存布局与数据库格式，版本更新后如失败，按 `doctor --json` 的版本信息适配，详见 `docs/ARCHITECTURE.md`。
 
-密码格式和端到端测试使用独立 native SQLCipher 4 库生成的合成数据库，不使用真实聊天。测试通过 `ctypes.util.find_library('sqlcipher')` 寻找密码库，或用 `WXTEXT_TEST_SQLCIPHER` 指定库文件。**这只是测试依赖，Windows 使用工具时不需要安装 SQLCipher。** 缺少该库会明确跳过对应测试，不能把跳过算成解密验证通过。
+## 更多文档
 
-本环境已检测到 SQLCipher `4.14.0 community` / SQLite `3.51.3`。Windows DPAPI 测试在 WSL 会跳过。
+- [架构与适配说明](docs/ARCHITECTURE.md)
+- [Windows 实机验收步骤](docs/WINDOWS_ACCEPTANCE.md)
 
-详见 [架构与适配说明](docs/ARCHITECTURE.md) 和 [Windows 实机验收步骤](docs/WINDOWS_ACCEPTANCE.md)。只有本机已存的记录能被导出；手机独有的历史需先通过微信自身功能迁移。
+开发和测试说明见 `pyproject.toml` 与 `tests/`；测试使用独立 SQLCipher 库生成的合成数据库，不涉及真实聊天数据。
