@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wxtext-local"
+version = "0.1.0"
+description = "Local-only, targeted WeChat Windows 4.x private text export"
+requires-python = ">=3.12"
+dependencies = ["cryptography>=42", "zstandard>=0.22"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+wxtext = "wxtext.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["wxtext*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
